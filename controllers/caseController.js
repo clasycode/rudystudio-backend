@@ -40,13 +40,17 @@ class CaseController {
         }
       }
 
-      const { caseImg, siteImg } = req.files;
+      const { caseImg, siteImg, siteImgMobile } = req.files;
 
       let caseImgName = uuid.v4() + path.extname(caseImg.name);
       let siteImgName = uuid.v4() + path.extname(siteImg.name);
+      let siteImgMobileName = uuid.v4() + path.extname(siteImgMobile.name);
 
       caseImg.mv(path.resolve(__dirname, "..", "static", caseImgName));
       siteImg.mv(path.resolve(__dirname, "..", "static", siteImgName));
+      siteImgMobile.mv(
+        path.resolve(__dirname, "..", "static", siteImgMobileName)
+      );
 
       const siteCase = await Case.create({
         caseImg: caseImgName,
@@ -57,6 +61,7 @@ class CaseController {
         sphere,
         sphere_color,
         siteImg: siteImgName,
+        siteImgMobile: siteImgMobileName,
         what,
         problem,
         aim,
@@ -184,6 +189,16 @@ class CaseController {
             path.resolve(__dirname, "..", "static", siteImgName)
           );
           caseData.siteImg = siteImgName;
+        }
+
+        if (req.files.siteImgMobile) {
+          const siteImgMobile = req.files.siteImgMobile;
+          const siteImgMobileName =
+            uuid.v4() + path.extname(siteImgMobile.name);
+          await siteImgMobile.mv(
+            path.resolve(__dirname, "..", "static", siteImgMobileName)
+          );
+          caseData.siteImgMobile = siteImgMobileName;
         }
       }
 

@@ -17,6 +17,7 @@ const Case = sequelize.define("case", {
   sphere: { type: DataTypes.STRING, allowNull: false },
   sphere_color: { type: DataTypes.STRING, allowNull: false },
   siteImg: { type: DataTypes.STRING, allowNull: false },
+  siteImgMobile: { type: DataTypes.STRING, allowNull: false },
   what: { type: DataTypes.TEXT, allowNull: false },
   problem: { type: DataTypes.TEXT, allowNull: false },
   aim: { type: DataTypes.TEXT, allowNull: false },
