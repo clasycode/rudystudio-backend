@@ -1,5 +1,6 @@
 const uuid = require("uuid");
 const path = require("path");
+const sharp = require("sharp");
 const { Case, CaseSection } = require("../models/models");
 const ApiError = require("../error/ApiError");
 
@@ -46,11 +47,19 @@ class CaseController {
       let siteImgName = uuid.v4() + path.extname(siteImg.name);
       let siteImgMobileName = uuid.v4() + path.extname(siteImgMobile.name);
 
-      caseImg.mv(path.resolve(__dirname, "..", "static", caseImgName));
-      siteImg.mv(path.resolve(__dirname, "..", "static", siteImgName));
-      siteImgMobile.mv(
-        path.resolve(__dirname, "..", "static", siteImgMobileName)
-      );
+      // Использование sharp для обработки изображений
+      await sharp(caseImg.data)
+        // Установите нужный размер
+        .jpeg({ quality: 100 }) // Установите нужное качество
+        .toFile(path.resolve(__dirname, "..", "static", caseImgName));
+
+      await sharp(siteImg.data)
+        .jpeg({ quality: 100 })
+        .toFile(path.resolve(__dirname, "..", "static", siteImgName));
+
+      await sharp(siteImgMobile.data)
+        .jpeg({ quality: 100 })
+        .toFile(path.resolve(__dirname, "..", "static", siteImgMobileName));
 
       const siteCase = await Case.create({
         caseImg: caseImgName,
@@ -78,9 +87,9 @@ class CaseController {
         for (const section of caseSections) {
           if (section.img) {
             const sectionImgName = uuid.v4() + path.extname(section.img.name);
-            section.img.mv(
-              path.resolve(__dirname, "..", "static", sectionImgName)
-            );
+            await sharp(section.img.data)
+              .jpeg({ quality: 100 })
+              .toFile(path.resolve(__dirname, "..", "static", sectionImgName));
             section.img = sectionImgName;
           }
         }
