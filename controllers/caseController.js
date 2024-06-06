@@ -1,6 +1,7 @@
 const uuid = require("uuid");
 const path = require("path");
 const sharp = require("sharp");
+const fs = require("fs");
 const { Case, CaseSection } = require("../models/models");
 const ApiError = require("../error/ApiError");
 
@@ -49,7 +50,6 @@ class CaseController {
 
       // Использование sharp для обработки изображений
       await sharp(caseImg.data)
-        // Установите нужный размер
         .jpeg({ quality: 100 }) // Установите нужное качество
         .toFile(path.resolve(__dirname, "..", "static", caseImgName));
 
@@ -140,15 +140,42 @@ class CaseController {
   async deleteOne(req, res, next) {
     try {
       const { id } = req.params;
-      const result = await Case.destroy({
-        where: { id },
-      });
 
-      if (result) {
-        return res.json({ message: "Case deleted successfully" });
-      } else {
+      // Найти кейс, чтобы получить имена файлов изображений
+      const siteCase = await Case.findOne({
+        where: { id },
+        include: [{ model: CaseSection, as: "sections" }],
+      });
+      if (!siteCase) {
         return next(ApiError.badRequest("Case not found"));
       }
+
+      // Удалить изображения
+      const deleteFile = (fileName) => {
+        const filePath = path.resolve(__dirname, "..", "static", fileName);
+        fs.unlink(filePath, (err) => {
+          if (err) {
+            console.error(`Failed to delete file: ${filePath}`, err);
+          } else {
+            console.log(`File deleted: ${filePath}`);
+          }
+        });
+      };
+
+      deleteFile(siteCase.caseImg);
+      deleteFile(siteCase.siteImg);
+      deleteFile(siteCase.siteImgMobile);
+
+      siteCase.sections.forEach((section) => {
+        if (section.img) {
+          deleteFile(section.img);
+        }
+      });
+
+      // Удалить кейс из базы данных
+      await Case.destroy({ where: { id } });
+
+      return res.json({ message: "Case deleted successfully" });
     } catch (e) {
       next(ApiError.internal(e.message));
     }
@@ -169,6 +196,15 @@ class CaseController {
         aim,
       } = req.body;
 
+      // Найти текущий кейс для получения старых данных
+      const currentCase = await Case.findOne({
+        where: { id },
+        include: [{ model: CaseSection, as: "sections" }],
+      });
+      if (!currentCase) {
+        return next(ApiError.badRequest("Case not found"));
+      }
+
       const caseData = {
         caseLink,
         siteLink,
@@ -181,34 +217,61 @@ class CaseController {
         aim,
       };
 
+      const deleteFile = (fileName) => {
+        const filePath = path.resolve(__dirname, "..", "static", fileName);
+        fs.unlink(filePath, (err) => {
+          if (err) {
+            console.error(`Failed to delete file: ${filePath}`, err);
+          } else {
+            console.log(`File deleted: ${filePath}`);
+          }
+        });
+      };
+
       if (req.files) {
         if (req.files.caseImg) {
           const caseImg = req.files.caseImg;
           const caseImgName = uuid.v4() + path.extname(caseImg.name);
-          await caseImg.mv(
-            path.resolve(__dirname, "..", "static", caseImgName)
-          );
+          await sharp(caseImg.data)
+            .resize({ width: 800 })
+            .jpeg({ quality: 90 })
+            .toFile(path.resolve(__dirname, "..", "static", caseImgName));
+          deleteFile(currentCase.caseImg);
           caseData.caseImg = caseImgName;
+        } else {
+          caseData.caseImg = currentCase.caseImg;
         }
 
         if (req.files.siteImg) {
           const siteImg = req.files.siteImg;
           const siteImgName = uuid.v4() + path.extname(siteImg.name);
-          await siteImg.mv(
-            path.resolve(__dirname, "..", "static", siteImgName)
-          );
+          await sharp(siteImg.data)
+            .resize({ width: 800 })
+            .jpeg({ quality: 90 })
+            .toFile(path.resolve(__dirname, "..", "static", siteImgName));
+          deleteFile(currentCase.siteImg);
           caseData.siteImg = siteImgName;
+        } else {
+          caseData.siteImg = currentCase.siteImg;
         }
 
         if (req.files.siteImgMobile) {
           const siteImgMobile = req.files.siteImgMobile;
           const siteImgMobileName =
             uuid.v4() + path.extname(siteImgMobile.name);
-          await siteImgMobile.mv(
-            path.resolve(__dirname, "..", "static", siteImgMobileName)
-          );
+          await sharp(siteImgMobile.data)
+            .resize({ width: 800 })
+            .jpeg({ quality: 90 })
+            .toFile(path.resolve(__dirname, "..", "static", siteImgMobileName));
+          deleteFile(currentCase.siteImgMobile);
           caseData.siteImgMobile = siteImgMobileName;
+        } else {
+          caseData.siteImgMobile = currentCase.siteImgMobile;
         }
+      } else {
+        caseData.caseImg = currentCase.caseImg;
+        caseData.siteImg = currentCase.siteImg;
+        caseData.siteImgMobile = currentCase.siteImgMobile;
       }
 
       await Case.update(caseData, { where: { id } });
@@ -218,24 +281,29 @@ class CaseController {
       if (sections && sections.length) {
         await CaseSection.destroy({ where: { caseId: id } });
 
-        const caseSections = sections.map((section) => {
+        const caseSections = [];
+
+        for (const section of sections) {
           const sectionData = {
             caseId: id,
             title: section.title,
             text: section.text,
           };
 
-          if (section.img) {
+          if (req.files && req.files[`sections[${section.index}][img]`]) {
             const sectionImg = req.files[`sections[${section.index}][img]`];
             const sectionImgName = uuid.v4() + path.extname(sectionImg.name);
-            sectionImg.mv(
-              path.resolve(__dirname, "..", "static", sectionImgName)
-            );
+            await sharp(sectionImg.data)
+              .resize({ width: 800 })
+              .jpeg({ quality: 90 })
+              .toFile(path.resolve(__dirname, "..", "static", sectionImgName));
             sectionData.img = sectionImgName;
+          } else {
+            sectionData.img = section.img; // Используем старое изображение
           }
 
-          return sectionData;
-        });
+          caseSections.push(sectionData);
+        }
 
         await CaseSection.bulkCreate(caseSections);
       }
